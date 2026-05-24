@@ -1,0 +1,17 @@
+[project]
+name = "agent-runtime"
+version = "0.1.0"
+description = "A Python user-space Agent Runtime for multi-agent scheduling, context management, fault isolation, and observability."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+arun = "agent_runtime.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+

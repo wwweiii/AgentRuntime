@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Runtime Dashboard</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, "Microsoft YaHei", sans-serif;
+        background: #f6f7f9;
+        color: #1f2933;
+      }
+      body {
+        margin: 0;
+      }
+      header {
+        background: #18324a;
+        color: white;
+        padding: 18px 28px;
+      }
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+      input {
+        flex: 1;
+        padding: 9px 10px;
+        border: 1px solid #b7c0cc;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      button {
+        padding: 9px 14px;
+        border: 0;
+        border-radius: 6px;
+        background: #1b6ca8;
+        color: white;
+        cursor: pointer;
+      }
+      section {
+        background: white;
+        border: 1px solid #dce2ea;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #101820;
+        color: #d8e4ee;
+        border-radius: 6px;
+        padding: 14px;
+        max-height: 420px;
+        overflow: auto;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .metric {
+        border: 1px solid #dce2ea;
+        border-radius: 8px;
+        padding: 12px;
+        background: #fbfcfd;
+      }
+      .metric strong {
+        display: block;
+        font-size: 22px;
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Agent Runtime Dashboard</h1>
+    </header>
+    <main>
+      <div class="toolbar">
+        <input id="runPath" value="../runs/latest.json" />
+        <button onclick="loadMetrics()">Load Metrics</button>
+      </div>
+      <section>
+        <h2>Run Summary</h2>
+        <div class="grid" id="summary"></div>
+      </section>
+      <section>
+        <h2>Raw Metrics</h2>
+        <pre id="raw">输入 runs/&lt;run_id&gt;/metrics.json 的相对路径后加载。</pre>
+      </section>
+    </main>
+    <script>
+      async function loadMetrics() {
+        const path = document.getElementById("runPath").value;
+        const raw = document.getElementById("raw");
+        const summary = document.getElementById("summary");
+        try {
+          const data = await fetch(path).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          });
+          raw.textContent = JSON.stringify(data, null, 2);
+          const states = data.states || {};
+          const context = data.context || {};
+          const counters = (data.metrics && data.metrics.counters) || {};
+          summary.innerHTML = [
+            ["Run", data.run_id || "-"],
+            ["Completed", states.completed || 0],
+            ["Failed", states.failed || 0],
+            ["Context Reuse", Number(context.reuse_ratio || 0).toFixed(2)],
+            ["Segments", context.segments || 0],
+            ["Prompt Tokens", counters["model.prompt_tokens_est"] || 0],
+            ["Output Tokens", counters["model.output_tokens_est"] || 0],
+            ["Context Tokens", counters["model.context_tokens_est"] || 0],
+          ]
+            .map(([k, v]) => `<div class="metric">${k}<strong>${v}</strong></div>`)
+            .join("");
+        } catch (err) {
+          raw.textContent = String(err);
+          summary.innerHTML = "";
+        }
+      }
+    </script>
+  </body>
+</html>

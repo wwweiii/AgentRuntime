@@ -1,0 +1,180 @@
+{
+  "runtime": {
+    "model": "qwen3.5:9b",
+    "ollama_url": "http://localhost:11434",
+    "max_workers": 3,
+    "max_parallel_model_calls": 2,
+    "memory_budget_mb": 8192,
+    "token_budget_per_task": 16000,
+    "context_compression_threshold": 8000,
+    "enable_dynamic_tasks": true
+  },
+  "root_context": {
+    "goal": "对 AgentRuntime 项目执行一次完整的代码评审流水线：需求分析→架构评审→前端/后端/数据库→安全审计→性能评估→测试→动态修复→集成→总结",
+    "segments": [
+      {
+        "kind": "constraint",
+        "content": "AgentRuntime是一个多智能体执行时原型，使用Python实现。代码约30个源文件，涉及调度、上下文管理、进程隔离、消息通信、故障恢复等模块。",
+        "owner": "user",
+        "visibility": "shared"
+      },
+      {
+        "kind": "quality_gate",
+        "content": "代码安全评审：无严重漏洞方可放行。性能指标：P99延迟<500ms。测试覆盖率>80%。所有模块必须有清晰的职责边界。",
+        "owner": "user",
+        "visibility": "shared"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "agent_id": "requirement_analyst",
+      "role": "需求分析师",
+      "system_prompt": "你负责解析项目需求，将模糊的目标转化为可评审的功能需求和非功能需求条目。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "architect",
+      "role": "架构师",
+      "system_prompt": "你负责评审系统架构、模块划分、接口设计和扩展性。",
+      "resource_profile": { "memory_mb": 768, "model_tokens": 6000 }
+    },
+    {
+      "agent_id": "frontend_dev",
+      "role": "前端评审员",
+      "system_prompt": "你负责评审前端组件树、状态管理方案和API契约。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "backend_dev",
+      "role": "后端评审员",
+      "system_prompt": "你负责评审后端路由分层、Service-Repository模式和API版本策略。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "db_designer",
+      "role": "数据库评审员",
+      "system_prompt": "你负责评审数据库ER模型、索引策略和读写分离方案。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "security_auditor",
+      "role": "安全审计员",
+      "system_prompt": "你负责审计安全漏洞，评估CORS、认证、日志脱敏等安全项。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "performance_reviewer",
+      "role": "性能评审员",
+      "system_prompt": "你负责评审系统性能指标、数据库连接池、缓存策略等性能相关设计。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "tester",
+      "role": "测试设计师",
+      "system_prompt": "你负责设计测试方案，覆盖单元测试、集成测试和边界条件。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "debugger",
+      "role": "修复工程师",
+      "system_prompt": "你负责根据测试和安全审计发现的问题给出具体修复方案。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "summarizer",
+      "role": "汇总分析师",
+      "system_prompt": "你负责汇总所有评审结果，形成最终代码评审报告。",
+      "resource_profile": { "memory_mb": 768, "model_tokens": 6000 }
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "req_analysis",
+      "agent_id": "requirement_analyst",
+      "objective": "解析AgentRuntime项目的功能需求和非功能需求，形成需求评审文档。",
+      "priority": 10,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "summarizer" }
+    },
+    {
+      "task_id": "arch_review",
+      "agent_id": "architect",
+      "objective": "基于需求文档评审项目架构：模块划分、接口设计、扩展性和依赖关系是否合理。",
+      "dependencies": ["req_analysis"],
+      "priority": 9,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "summarizer" }
+    },
+    {
+      "task_id": "frontend_review",
+      "agent_id": "frontend_dev",
+      "objective": "评审前端相关设计：组件架构、状态管理、API契约。",
+      "dependencies": ["arch_review"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "backend_review",
+      "agent_id": "backend_dev",
+      "objective": "评审后端设计：路由分层、服务模式、API版本策略。",
+      "dependencies": ["arch_review"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "db_review",
+      "agent_id": "db_designer",
+      "objective": "评审数据库设计：ER模型、索引策略、读写分离方案。",
+      "dependencies": ["arch_review"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "security_audit",
+      "agent_id": "security_auditor",
+      "objective": "对项目进行安全审计：检查认证、授权、数据保护、日志安全。",
+      "dependencies": ["backend_review", "db_review"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "summarizer" }
+    },
+    {
+      "task_id": "perf_review",
+      "agent_id": "performance_reviewer",
+      "objective": "评审性能指标：数据库连接池、缓存策略、P99延迟评估。",
+      "dependencies": ["backend_review", "db_review"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "test_design",
+      "agent_id": "tester",
+      "objective": "设计测试方案：单元测试、集成测试、边界条件测试。如发现问题请求debugger动态修复。",
+      "dependencies": ["frontend_review", "backend_review"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "debugger" }
+    },
+    {
+      "task_id": "fix_issues",
+      "agent_id": "debugger",
+      "objective": "汇总安全审计、性能评审和测试中发现的所有问题，给出统一修复方案。",
+      "dependencies": ["security_audit", "perf_review", "test_design"],
+      "priority": 8,
+      "failure_policy": { "retry": 2, "timeout_s": 180 }
+    },
+    {
+      "task_id": "integration_verify",
+      "agent_id": "tester",
+      "objective": "验证修复后的集成测试是否通过，确认所有质量门禁是否达标。",
+      "dependencies": ["fix_issues"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "final_report",
+      "agent_id": "summarizer",
+      "objective": "汇总需求分析、架构、前后端、数据库、安全、性能、测试、修复和集成验证的全部结果，形成最终代码评审报告。",
+      "dependencies": ["integration_verify"],
+      "priority": 5,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    }
+  ]
+}

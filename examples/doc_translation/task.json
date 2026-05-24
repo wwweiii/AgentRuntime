@@ -1,0 +1,150 @@
+{
+  "runtime": {
+    "model": "qwen3.5:9b",
+    "ollama_url": "http://localhost:11434",
+    "max_workers": 4,
+    "max_parallel_model_calls": 3,
+    "memory_budget_mb": 8192,
+    "token_budget_per_task": 12000,
+    "context_compression_threshold": 6000,
+    "enable_dynamic_tasks": false
+  },
+  "root_context": {
+    "goal": "将 AgentRuntime 项目文档翻译为中文、日文、韩文三个语言版本，并通过文化适配审查、技术审查、格式化后发布。",
+    "segments": [
+      {
+        "kind": "source_doc",
+        "content": "Agent Runtime is a multi-agent user-space execution runtime prototype. It models agents as first-class OS-like processes with task scheduling, context reuse, message passing, fault isolation, resource accounting, and system-level observability.",
+        "owner": "user",
+        "visibility": "shared"
+      },
+      {
+        "kind": "glossary",
+        "content": "Agent Runtime=智能体执行时 | context=上下文 | snapshot=快照 | fault isolation=故障隔离 | scheduler=调度器 | worker=执行单元",
+        "owner": "user",
+        "visibility": "shared"
+      },
+      {
+        "kind": "style_guide",
+        "content": "技术术语首次出现时保留英文原文加中文括号注释。代码块不翻译。URL和文件路径保留原文。章节编号与源文档保持一致。",
+        "owner": "user",
+        "visibility": "shared"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "agent_id": "doc_analyzer",
+      "role": "文档分析员",
+      "system_prompt": "你负责分析源文档结构、提取术语表、标记不可翻译内容（代码块、URL、文件路径）并生成翻译指南。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 6000 }
+    },
+    {
+      "agent_id": "translator_zh",
+      "role": "中文翻译员",
+      "system_prompt": "你负责将英文技术文档翻译为简体中文，遵循术语表和风格指南。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "translator_ja",
+      "role": "日文翻译员",
+      "system_prompt": "你负责将英文技术文档翻译为日文，遵循术语表和风格指南。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "translator_ko",
+      "role": "韩文翻译员",
+      "system_prompt": "你负责将英文技术文档翻译为韩文，遵循术语表和风格指南。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "cultural_reviewer",
+      "role": "文化适配审查员",
+      "system_prompt": "你负责审查各语言版本的文化适配性，替换不符合本地习惯的习语和隐喻。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "technical_reviewer",
+      "role": "技术审查员",
+      "system_prompt": "你负责审查各语言版本的技术准确性，确保术语翻译一致、代码块完整、API名称未被误译。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "formatter",
+      "role": "格式化工程师",
+      "system_prompt": "你负责统一多语言文档的排版格式、生成PDF和HTML双格式输出。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "publisher",
+      "role": "发布工程师",
+      "system_prompt": "你负责多语言文档的发布：推送CDN、验证URL可访问性、通知订阅者。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "analyze_doc",
+      "agent_id": "doc_analyzer",
+      "objective": "分析源文档结构，提取关键术语，标记不可翻译内容，生成翻译指南。",
+      "priority": 10,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "translate_zh",
+      "agent_id": "translator_zh",
+      "objective": "将源文档翻译为简体中文版本。",
+      "dependencies": ["analyze_doc"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 180 }
+    },
+    {
+      "task_id": "translate_ja",
+      "agent_id": "translator_ja",
+      "objective": "将源文档翻译为日文版本。",
+      "dependencies": ["analyze_doc"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 180 }
+    },
+    {
+      "task_id": "translate_ko",
+      "agent_id": "translator_ko",
+      "objective": "将源文档翻译为韩文版本。",
+      "dependencies": ["analyze_doc"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 180 }
+    },
+    {
+      "task_id": "cultural_review",
+      "agent_id": "cultural_reviewer",
+      "objective": "审查中、日、韩三个语言版本的文化适配性，提出修改建议。",
+      "dependencies": ["translate_zh", "translate_ja", "translate_ko"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "tech_review",
+      "agent_id": "technical_reviewer",
+      "objective": "审查中、日、韩三个语言版本的技术准确性，确保术语翻译一致。",
+      "dependencies": ["translate_zh", "translate_ja", "translate_ko"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "format_output",
+      "agent_id": "formatter",
+      "objective": "将审查通过的中、日、韩三个语言版本统一格式，生成PDF和HTML。",
+      "dependencies": ["cultural_review", "tech_review"],
+      "priority": 6,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "publish",
+      "agent_id": "publisher",
+      "objective": "发布多语言文档：推送CDN、验证URL可访问性、发送发布通知。",
+      "dependencies": ["format_output"],
+      "priority": 5,
+      "failure_policy": { "retry": 2, "timeout_s": 120 }
+    }
+  ]
+}

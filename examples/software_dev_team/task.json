@@ -1,0 +1,139 @@
+{
+  "runtime": {
+    "model": "qwen3.5:9b",
+    "ollama_url": "http://localhost:11434",
+    "max_workers": 2,
+    "max_parallel_model_calls": 1,
+    "memory_budget_mb": 4096,
+    "token_budget_per_task": 12000,
+    "context_compression_threshold": 5000,
+    "enable_dynamic_tasks": true
+  },
+  "root_context": {
+    "goal": "实现一个 Todo CLI 小项目，并展示多 Agent Runtime 的调度、上下文复用、通信、容错和可观测能力。",
+    "segments": [
+      {
+        "kind": "constraint",
+        "content": "请优先给出可执行的工程方案，输出应能被后续 Agent 复用。Agent 之间只能通过 Runtime 共享 context_ref。",
+        "owner": "user",
+        "visibility": "shared"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "agent_id": "planner",
+      "role": "Planner Agent",
+      "system_prompt": "你负责拆解复杂任务，形成执行计划、依赖关系和风险点。",
+      "resource_profile": {
+        "memory_mb": 512,
+        "model_tokens": 4096
+      }
+    },
+    {
+      "agent_id": "coder",
+      "role": "Coder Agent",
+      "system_prompt": "你负责根据计划生成代码结构和核心实现说明。",
+      "resource_profile": {
+        "memory_mb": 768,
+        "model_tokens": 6000
+      }
+    },
+    {
+      "agent_id": "tester",
+      "role": "Tester Agent",
+      "system_prompt": "你负责设计测试、分析失败，并在需要时请求 Debugger Agent。",
+      "resource_profile": {
+        "memory_mb": 512,
+        "model_tokens": 4096
+      }
+    },
+    {
+      "agent_id": "reviewer",
+      "role": "Reviewer Agent",
+      "system_prompt": "你负责评审系统设计、代码质量、可观测性和实验可信度。",
+      "resource_profile": {
+        "memory_mb": 512,
+        "model_tokens": 4096
+      }
+    },
+    {
+      "agent_id": "debugger",
+      "role": "Debugger Agent",
+      "system_prompt": "你负责根据失败日志和上下文快照定位问题，给出修复方案。",
+      "resource_profile": {
+        "memory_mb": 512,
+        "model_tokens": 4096
+      }
+    },
+    {
+      "agent_id": "summarizer",
+      "role": "Summarizer Agent",
+      "system_prompt": "你负责将所有 Agent 的输出汇总为最终交付报告。",
+      "resource_profile": {
+        "memory_mb": 512,
+        "model_tokens": 4096
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "plan",
+      "agent_id": "planner",
+      "objective": "拆解 Todo CLI 项目和 Runtime 演示流程。",
+      "priority": 9,
+      "failure_policy": {
+        "retry": 1,
+        "timeout_s": 120,
+        "fallback_agent": "summarizer"
+      }
+    },
+    {
+      "task_id": "code",
+      "agent_id": "coder",
+      "objective": "根据计划设计 Todo CLI 的模块、命令和关键代码。",
+      "dependencies": ["plan"],
+      "priority": 8,
+      "failure_policy": {
+        "retry": 1,
+        "timeout_s": 120,
+        "fallback_agent": "debugger"
+      }
+    },
+    {
+      "task_id": "test",
+      "agent_id": "tester",
+      "objective": "设计测试用例，识别边界问题，并在需要时动态请求 Debugger。",
+      "dependencies": ["code"],
+      "priority": 8,
+      "failure_policy": {
+        "retry": 1,
+        "timeout_s": 120,
+        "fallback_agent": "debugger"
+      }
+    },
+    {
+      "task_id": "review",
+      "agent_id": "reviewer",
+      "objective": "评审 Todo CLI 和 Runtime 机制设计是否满足赛题要求。",
+      "dependencies": ["code"],
+      "priority": 7,
+      "failure_policy": {
+        "retry": 1,
+        "timeout_s": 120
+      }
+    },
+    {
+      "task_id": "summary",
+      "agent_id": "summarizer",
+      "objective": "汇总计划、代码、测试、评审和动态修复结果，形成最终报告。",
+      "dependencies": ["test", "review"],
+      "priority": 6,
+      "failure_policy": {
+        "retry": 1,
+        "timeout_s": 120
+      }
+    }
+  ]
+}
+

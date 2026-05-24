@@ -1,0 +1,200 @@
+{
+  "runtime": {
+    "model": "qwen3.5:9b",
+    "ollama_url": "http://localhost:11434",
+    "max_workers": 4,
+    "max_parallel_model_calls": 2,
+    "memory_budget_mb": 16384,
+    "token_budget_per_task": 16000,
+    "context_compression_threshold": 10000,
+    "enable_dynamic_tasks": true
+  },
+  "root_context": {
+    "goal": "设计一个支持多租户的电商平台系统，涵盖业务分析、系统架构、API设计、数据库、支付、库存、UI、安全、性能、测试，最终汇总交付。",
+    "segments": [
+      {
+        "kind": "business_requirement",
+        "content": "构建B2B2C多租户电商平台。核心功能：商品管理、购物车、订单系统、支付集成、库存管理、用户中心、商家后台、管理面板。非功能需求：支持10万并发用户、P99延迟<200ms、99.99%可用性、PCI-DSS合规。",
+        "owner": "user",
+        "visibility": "shared"
+      },
+      {
+        "kind": "tech_constraint",
+        "content": "技术选型约束：后端Java/Spring Boot或Python/FastAPI，前端React，数据库PostgreSQL+Redis，消息队列Kafka，容器化部署K8s。需考虑多租户数据隔离策略（Database-per-tenant vs Schema-per-tenant vs Shared-table）。",
+        "owner": "user",
+        "visibility": "shared"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "agent_id": "business_analyst",
+      "role": "业务分析师",
+      "system_prompt": "你负责分析电商平台的业务需求、用户画像和核心业务流程。",
+      "resource_profile": { "memory_mb": 768, "model_tokens": 6000 }
+    },
+    {
+      "agent_id": "system_architect",
+      "role": "系统架构师",
+      "system_prompt": "你负责设计电商平台的总体系统架构，包括微服务拆分、多租户策略和基础设施方案。",
+      "resource_profile": { "memory_mb": 1024, "model_tokens": 8000 }
+    },
+    {
+      "agent_id": "api_designer",
+      "role": "API设计师",
+      "system_prompt": "你负责设计电商平台的RESTful API资源模型、请求响应Schema和错误码规范。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "db_architect",
+      "role": "数据库架构师",
+      "system_prompt": "你负责设计电商平台的数据库架构：多租户数据隔离、核心实体ER模型、索引和分区策略。",
+      "resource_profile": { "memory_mb": 768, "model_tokens": 6000 }
+    },
+    {
+      "agent_id": "payment_designer",
+      "role": "支付系统设计师",
+      "system_prompt": "你负责设计支付系统：多渠道集成、幂等性、对账流程和PCI-DSS合规方案。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "inventory_designer",
+      "role": "库存系统设计师",
+      "system_prompt": "你负责设计库存系统：事件溯源、预占确认释放、库存预警和补货触发。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "ui_designer",
+      "role": "UI/UX设计师",
+      "system_prompt": "你负责设计电商平台的用户界面方案、组件库和无障碍合规。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "security_expert",
+      "role": "安全专家",
+      "system_prompt": "你负责电商平台安全方案设计：认证授权、数据加密、防刷和PCI-DSS合规审计。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "performance_engineer",
+      "role": "性能工程师",
+      "system_prompt": "你负责性能方案设计：缓存策略、CDN、数据库连接池、读写分离、限流降级。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "test_coordinator",
+      "role": "测试协调员",
+      "system_prompt": "你负责设计整体测试策略：单元测试、集成测试、契约测试、性能测试和故障注入测试。发现问题时请求debugger动态修复。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "debugger",
+      "role": "修复工程师",
+      "system_prompt": "你负责根据测试和评审发现的问题给出修复方案。",
+      "resource_profile": { "memory_mb": 512, "model_tokens": 4096 }
+    },
+    {
+      "agent_id": "summarizer",
+      "role": "汇总分析师",
+      "system_prompt": "你负责汇总全部设计文档，形成最终交付报告，检查所有质量门禁是否通过。",
+      "resource_profile": { "memory_mb": 768, "model_tokens": 6000 }
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "business_analysis",
+      "agent_id": "business_analyst",
+      "objective": "分析电商平台业务需求：用户画像、核心业务流程、MVP范围划定。",
+      "priority": 10,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "summarizer" }
+    },
+    {
+      "task_id": "system_arch",
+      "agent_id": "system_architect",
+      "objective": "设计总体系统架构：微服务拆分方案、多租户数据隔离策略、基础设施拓扑。",
+      "dependencies": ["business_analysis"],
+      "priority": 9,
+      "failure_policy": { "retry": 1, "timeout_s": 180, "fallback_agent": "summarizer" }
+    },
+    {
+      "task_id": "api_design",
+      "agent_id": "api_designer",
+      "objective": "设计电商平台RESTful API：资源模型、端点列表、请求响应Schema、错误码。",
+      "dependencies": ["system_arch"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "db_design",
+      "agent_id": "db_architect",
+      "objective": "设计数据库架构：多租户隔离策略选型、核心实体ER模型、索引与分区方案。",
+      "dependencies": ["system_arch"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "payment_design",
+      "agent_id": "payment_designer",
+      "objective": "设计支付系统：多渠道集成、幂等机制、对账流程、PCI-DSS合规。",
+      "dependencies": ["api_design", "db_design"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "inventory_design",
+      "agent_id": "inventory_designer",
+      "objective": "设计库存系统：事件溯源方案、预占确认释放两阶段提交、库存预警。",
+      "dependencies": ["api_design", "db_design"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "ui_design",
+      "agent_id": "ui_designer",
+      "objective": "设计UI/UX方案：移动端+桌面端布局、组件库、无障碍合规、用户旅程埋点。",
+      "dependencies": ["business_analysis"],
+      "priority": 7,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "security_design",
+      "agent_id": "security_expert",
+      "objective": "设计安全方案：认证授权架构、数据加密策略、防刷机制、PCI-DSS合规检查。",
+      "dependencies": ["api_design", "payment_design"],
+      "priority": 9,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "summarizer" }
+    },
+    {
+      "task_id": "perf_design",
+      "agent_id": "performance_engineer",
+      "objective": "设计性能方案：Redis缓存策略、CDN部署、数据库连接池优化、限流降级熔断。",
+      "dependencies": ["api_design", "db_design", "inventory_design"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    },
+    {
+      "task_id": "test_plan",
+      "agent_id": "test_coordinator",
+      "objective": "设计整体测试策略：单元/集成/契约/性能/故障注入测试方案。如发现设计缺陷请求debugger修复。",
+      "dependencies": ["api_design", "db_design", "payment_design", "security_design"],
+      "priority": 8,
+      "failure_policy": { "retry": 1, "timeout_s": 120, "fallback_agent": "debugger" }
+    },
+    {
+      "task_id": "fix_design_issues",
+      "agent_id": "debugger",
+      "objective": "汇总安全、性能、测试中发现的设计缺陷，给出统一修复方案。",
+      "dependencies": ["test_plan", "security_design", "perf_design"],
+      "priority": 8,
+      "failure_policy": { "retry": 2, "timeout_s": 180 }
+    },
+    {
+      "task_id": "final_summary",
+      "agent_id": "summarizer",
+      "objective": "汇总业务分析、架构、API、数据库、支付、库存、UI、安全、性能、测试、修复的全部设计产出，形成最终交付报告，检查质量门禁。",
+      "dependencies": ["fix_design_issues", "ui_design"],
+      "priority": 5,
+      "failure_policy": { "retry": 1, "timeout_s": 120 }
+    }
+  ]
+}
