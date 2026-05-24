@@ -31,8 +31,9 @@ def execute_agent_task(payload: dict[str, Any]) -> dict[str, Any]:
     task_id = task_data["task_id"]
     try:
         agent_id = agent_data["agent_id"]
+        pending_messages = payload.get("pending_messages", [])
         system_prompt = _build_system_prompt(agent_data)
-        user_prompt = _build_user_prompt(task_data, context_text, context_metrics)
+        user_prompt = _build_user_prompt(task_data, context_text, context_metrics, pending_messages)
         client = OllamaClient(
             base_url=config_data["ollama_url"],
             model=agent_data.get("model") or config_data["model"],
@@ -58,6 +59,7 @@ def execute_agent_task(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             ],
             "dynamic_tasks": _extract_dynamic_tasks(output, task_data, config_data),
+            "message_directives": _extract_message_directives(output),
             "metrics": {
                 "latency_s": time.time() - start,
                 "model_latency_s": response.latency_s,
@@ -87,35 +89,83 @@ def _build_system_prompt(agent_data: dict[str, Any]) -> str:
     )
 
 
-def _build_user_prompt(task_data: dict[str, Any], context_text: str, context_metrics: dict[str, Any]) -> str:
-    return (
-        f"Task ID: {task_data['task_id']}\n"
-        f"Objective: {task_data['objective']}\n"
-        f"Context snapshot: {task_data.get('context_id')}\n"
-        f"Context metrics: {context_metrics}\n\n"
-        f"Visible context:\n{context_text}\n\n"
-        "Complete this AgentTask. If a debugger task is needed, include RUNTIME_DYNAMIC_TASK:debugger."
+def _build_user_prompt(
+    task_data: dict[str, Any],
+    context_text: str,
+    context_metrics: dict[str, Any],
+    pending_messages: list[dict[str, Any]] | None = None,
+) -> str:
+    parts = [
+        f"Task ID: {task_data['task_id']}",
+        f"Objective: {task_data['objective']}",
+        f"Context snapshot: {task_data.get('context_id')}",
+        f"Context metrics: {context_metrics}",
+    ]
+
+    if pending_messages:
+        parts.append("\nIncoming messages from other agents:")
+        for msg in pending_messages:
+            sender = msg.get("from", msg.get("sender", "unknown"))
+            payload = msg.get("payload", {})
+            content = payload.get("content", json.dumps(payload, ensure_ascii=False))
+            parts.append(f"[{sender}]: {content}")
+
+    parts.append(f"\nVisible context:\n{context_text}")
+    parts.append(
+        "\nComplete this AgentTask. You may use these runtime directives:\n"
+        "  RUNTIME_DYNAMIC_TASK:<agent_id>:<objective> — request a new task\n"
+        "  RUNTIME_MESSAGE:<agent_id>:<content>    — send a message to another agent"
     )
+    return "\n".join(parts)
 
 
 def _extract_dynamic_tasks(output: str, task_data: dict[str, Any], config_data: dict[str, Any]) -> list[dict[str, Any]]:
     if not config_data.get("enable_dynamic_tasks", True):
         return []
-    # Guard: if this is already a dynamic debug task, don't spawn another
     if task_data.get("agent_id") == "debugger" and task_data.get("dynamic"):
         return []
-    if "RUNTIME_DYNAMIC_TASK:debugger" not in output:
-        return []
-    return [
-        {
-            "agent_id": "debugger",
-            "objective": f"Fix the issue reported by task {task_data['task_id']}",
+    tasks: list[dict[str, Any]] = []
+    for line in output.split("\n"):
+        line = line.strip()
+        if not line.startswith("RUNTIME_DYNAMIC_TASK:"):
+            continue
+        # Format: RUNTIME_DYNAMIC_TASK:<agent_id>:<objective>
+        rest = line[len("RUNTIME_DYNAMIC_TASK:"):]
+        parts = rest.split(":", 1)
+        agent_id = parts[0].strip()
+        objective = parts[1].strip() if len(parts) > 1 else f"Dynamic task from {task_data['task_id']}"
+        if not agent_id:
+            continue
+        tasks.append({
+            "agent_id": agent_id,
+            "objective": objective,
             "dependencies": [task_data["task_id"]],
             "priority": 8,
             "created_by": task_data["task_id"],
             "dynamic": True,
-        }
-    ]
+        })
+    return tasks
+
+
+def _extract_message_directives(output: str) -> list[dict[str, Any]]:
+    directives: list[dict[str, Any]] = []
+    for line in output.split("\n"):
+        line = line.strip()
+        if not line.startswith("RUNTIME_MESSAGE:"):
+            continue
+        # Format: RUNTIME_MESSAGE:<agent_id>:<content>
+        rest = line[len("RUNTIME_MESSAGE:"):]
+        parts = rest.split(":", 1)
+        recipient = parts[0].strip()
+        content = parts[1].strip() if len(parts) > 1 else ""
+        if not recipient:
+            continue
+        directives.append({
+            "recipient": recipient,
+            "content": content,
+            "msg_type": "agent_directive",
+        })
+    return directives
 
 
 if __name__ == "__main__":

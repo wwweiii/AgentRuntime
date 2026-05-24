@@ -28,7 +28,7 @@ class AgentSpec:
     agent_id: str
     role: str
     system_prompt: str
-    model: str = "qwen3.5:9b"
+    model: str = "qwen3.5:4b"
     tools: list[str] = field(default_factory=list)
     resource_profile: ResourceRequest = field(default_factory=ResourceRequest)
     private_context: bool = False
@@ -53,7 +53,7 @@ class AgentTask:
 
 @dataclass(slots=True)
 class RuntimeConfig:
-    model: str = "qwen3.5:9b"
+    model: str = "qwen3.5:4b"
     ollama_url: str = "http://localhost:11434"
     max_workers: int = 2
     max_parallel_model_calls: int = 1
@@ -64,8 +64,12 @@ class RuntimeConfig:
     mock_model: bool = False
     enable_dynamic_tasks: bool = True
     max_dynamic_depth: int = 2
+    max_fallback_depth: int = 3
+    failure_rate_threshold: float = 0.5
     embedding_model: str | None = "qwen3-embedding:4b"
     semantic_threshold: float = 0.90
+    disable_context_reuse: bool = False
+    random_scheduling: bool = False
 
 
 @dataclass(slots=True)
@@ -77,4 +81,5 @@ class WorkerResult:
     metrics: dict[str, Any] = field(default_factory=dict)
     messages: list[dict[str, Any]] = field(default_factory=list)
     dynamic_tasks: list[dict[str, Any]] = field(default_factory=list)
+    message_directives: list[dict[str, Any]] = field(default_factory=list)
 

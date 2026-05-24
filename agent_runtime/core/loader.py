@@ -18,7 +18,7 @@ def load_scenario(path: Path) -> tuple[RuntimeConfig, list[AgentSpec], list[Agen
 
 def _runtime_config(data: dict[str, Any]) -> RuntimeConfig:
     return RuntimeConfig(
-        model=data.get("model", "qwen3.5:9b"),
+        model=data.get("model", "qwen3.5:4b"),
         ollama_url=data.get("ollama_url", "http://localhost:11434"),
         max_workers=int(data.get("max_workers", 2)),
         max_parallel_model_calls=int(data.get("max_parallel_model_calls", 1)),
@@ -29,8 +29,12 @@ def _runtime_config(data: dict[str, Any]) -> RuntimeConfig:
         mock_model=bool(data.get("mock_model", False)),
         enable_dynamic_tasks=bool(data.get("enable_dynamic_tasks", True)),
         max_dynamic_depth=int(data.get("max_dynamic_depth", 2)),
+        max_fallback_depth=int(data.get("max_fallback_depth", 3)),
+        failure_rate_threshold=float(data.get("failure_rate_threshold", 0.5)),
         embedding_model=data.get("embedding_model", "qwen3-embedding:4b"),
         semantic_threshold=float(data.get("semantic_threshold", 0.90)),
+        disable_context_reuse=bool(data.get("disable_context_reuse", False)),
+        random_scheduling=bool(data.get("random_scheduling", False)),
     )
 
 

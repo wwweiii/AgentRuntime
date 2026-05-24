@@ -1,6 +1,6 @@
 {
   "runtime": {
-    "model": "qwen3.5:9b",
+    "model": "qwen3.5:4b",
     "ollama_url": "http://localhost:11434",
     "max_workers": 4,
     "max_parallel_model_calls": 2,

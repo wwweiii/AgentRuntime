@@ -33,7 +33,7 @@ created -> ready -> scheduled -> running -> completed
 
 ### Model/Tool-as-Device
 
-LLM 被抽象为模型设备，目前实现 `OllamaClient`，默认使用本地 `qwen3.5:9b`。工具系统预留在 AgentSpec 的 `tools` 字段中，后续可以把代码执行器、文件系统、网络访问抽象为受控设备。
+LLM 被抽象为模型设备，目前实现 `OllamaClient`，默认使用本地 `qwen3.5:4b`。工具系统预留在 AgentSpec 的 `tools` 字段中，后续可以把代码执行器、文件系统、网络访问抽象为受控设备。
 
 ## 调度机制
 

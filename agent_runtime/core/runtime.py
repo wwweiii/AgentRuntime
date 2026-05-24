@@ -50,10 +50,13 @@ class AgentRuntime:
             compression_threshold_tokens=config.context_compression_threshold,
             embedding_client=embedding_client,
             semantic_threshold=config.semantic_threshold,
+            disable_reuse=config.disable_context_reuse,
         )
         self.message_bus = MessageBus()
         self.resource_manager = ResourceManager(config)
-        self.scheduler = ContextAwareDAGScheduler(self.context_store, self.resource_manager)
+        self.scheduler = ContextAwareDAGScheduler(
+            self.context_store, self.resource_manager, random_scheduling=config.random_scheduling,
+        )
         self.worker_manager = ProcessWorkerManager(self.run_dir, config)
         self.fault_manager = FaultManager()
         self.os_adapter = get_os_adapter()
@@ -170,6 +173,14 @@ class AgentRuntime:
 
         task.state = TaskState.SCHEDULED
         task.attempts += 1
+
+        # Deliver pending mailbox messages to this agent
+        pending = self.message_bus.peek(task.agent_id)
+        pending_data = [
+            {"from": m.sender, "type": m.msg_type, "payload": m.payload}
+            for m in pending
+        ]
+
         context_text, context_metrics = self.context_store.materialize(
             task.context_id or self.root_context_id,
             task.agent_id,
@@ -182,10 +193,11 @@ class AgentRuntime:
             attempt=task.attempts,
             context_id=task.context_id,
             context_metrics=context_metrics,
+            pending_messages=len(pending_data),
             resource=asdict(task.resource_request),
         )
         task.state = TaskState.RUNNING
-        worker = self.worker_manager.start(task, agent, context_text, context_metrics)
+        worker = self.worker_manager.start(task, agent, context_text, context_metrics, pending_data)
         self.running[task.task_id] = worker
         self.event_log.emit("task.started", task_id=task.task_id, pid=worker.process.pid, work_dir=str(worker.work_dir))
 
@@ -255,6 +267,30 @@ class AgentRuntime:
                     context_ref=task.context_id,
                 )
                 self.event_log.emit("message.published", topic="agent.outputs", task_id=task.task_id)
+
+            # Dispatch RUNTIME_MESSAGE directives
+            for directive in result.message_directives:
+                recipient = directive.get("recipient", "")
+                content = directive.get("content", "")
+                if recipient and recipient in self.agents:
+                    self.message_bus.send(
+                        sender=task.agent_id,
+                        recipient=recipient,
+                        msg_type=directive.get("msg_type", "agent_directive"),
+                        payload={"content": content, "from_task": task.task_id},
+                        context_ref=task.context_id,
+                    )
+                    self.event_log.emit(
+                        "message.sent",
+                        sender=task.agent_id,
+                        recipient=recipient,
+                        task_id=task.task_id,
+                    )
+                    self.metrics.inc("messages.sent")
+
+            # Clear consumed mailbox messages
+            self.message_bus.clear_mailbox(task.agent_id)
+
             self._add_dynamic_tasks(task, result.dynamic_tasks)
         else:
             self._handle_failure(task, result.error or "unknown worker error")
@@ -267,18 +303,43 @@ class AgentRuntime:
             self.event_log.emit("task.retrying", task_id=task.task_id, next_attempt=task.attempts + 1)
             return
 
+        # ── Circuit breaker: global failure rate ──
+        total = len(self.tasks)
+        failed = sum(1 for t in self.tasks.values() if t.state == TaskState.FAILED)
+        if total > 0 and (failed + 1) / total > self.config.failure_rate_threshold:
+            task.state = TaskState.FAILED
+            self.metrics.inc("circuit_breaker.tripped")
+            self.event_log.emit(
+                "circuit_breaker.tripped",
+                task_id=task.task_id,
+                reason=f"failure_rate {(failed + 1) / total:.2f} > {self.config.failure_rate_threshold}",
+            )
+            return
+
         if (
             task.failure_policy.fallback_agent
             and task.failure_policy.fallback_agent in self.agents
-            and not task.dynamic
-            and not task.task_id.endswith("-fallback")
         ):
+            # ── Limit fallback cascade depth ──
+            current_depth = task.metadata.get("fallback_depth", 0)
+            if current_depth >= self.config.max_fallback_depth:
+                task.state = TaskState.FAILED
+                self.metrics.inc("fallback.depth_exceeded")
+                self.event_log.emit(
+                    "fallback.skipped",
+                    task_id=task.task_id,
+                    reason=f"max_fallback_depth({self.config.max_fallback_depth}) reached at depth {current_depth}",
+                )
+                return
+
             fallback_agent_id = task.failure_policy.fallback_agent
             fallback_id = f"{task.task_id}-fallback"
+            # Shorter timeout for fallback tasks
+            fallback_timeout = max(30, task.failure_policy.timeout_s // 2)
             fallback_policy = FailurePolicy(
-                retry=task.failure_policy.retry,
+                retry=min(task.failure_policy.retry, 1),
                 retry_backoff_ms=task.failure_policy.retry_backoff_ms,
-                timeout_s=task.failure_policy.timeout_s,
+                timeout_s=fallback_timeout,
                 fallback_agent=None,
                 cascade=False,
             )
@@ -293,10 +354,17 @@ class AgentRuntime:
                 context_id=task.context_id,
                 created_by=task.task_id,
                 dynamic=True,
+                metadata={"fallback_depth": current_depth + 1, "original_task": task.task_id},
             )
             self.tasks[fallback_id] = fallback
             task.state = TaskState.FAILED
-            self.event_log.emit("task.fallback_created", task_id=task.task_id, fallback_task_id=fallback_id)
+            self.metrics.inc("fallback.created")
+            self.event_log.emit(
+                "task.fallback_created",
+                task_id=task.task_id,
+                fallback_task_id=fallback_id,
+                fallback_depth=current_depth + 1,
+            )
             return
 
         task.state = TaskState.FAILED

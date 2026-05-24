@@ -18,7 +18,7 @@ class ModelResponse:
 
 
 class OllamaClient:
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "qwen3.5:9b", mock: bool = False) -> None:
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "qwen3.5:4b", mock: bool = False) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.mock = mock

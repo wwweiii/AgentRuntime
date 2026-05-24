@@ -34,7 +34,14 @@ class ProcessWorkerManager:
         self.config = config
         self.project_root = Path(__file__).resolve().parents[2]
 
-    def start(self, task: AgentTask, agent: AgentSpec, context_text: str, context_metrics: dict[str, Any]) -> RunningWorker:
+    def start(
+        self,
+        task: AgentTask,
+        agent: AgentSpec,
+        context_text: str,
+        context_metrics: dict[str, Any],
+        pending_messages: list[dict[str, Any]] | None = None,
+    ) -> RunningWorker:
         work_dir = (self.run_dir / "workers" / task.task_id).resolve()
         work_dir.mkdir(parents=True, exist_ok=True)
         input_path = (work_dir / "input.json").resolve()
@@ -47,6 +54,7 @@ class ProcessWorkerManager:
             "context_metrics": context_metrics,
             "config": asdict(self.config),
             "work_dir": str(work_dir),
+            "pending_messages": pending_messages or [],
         }
         input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         env = os.environ.copy()

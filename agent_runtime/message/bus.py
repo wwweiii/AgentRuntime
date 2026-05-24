@@ -51,6 +51,13 @@ class MessageBus:
             messages.append(queue.popleft())
         return messages
 
+    def peek(self, agent_id: str, limit: int = 10) -> list[Message]:
+        queue = self.mailboxes[agent_id]
+        return list(queue)[:limit]
+
+    def clear_mailbox(self, agent_id: str) -> None:
+        self.mailboxes[agent_id].clear()
+
     def publish(
         self,
         sender: str,
