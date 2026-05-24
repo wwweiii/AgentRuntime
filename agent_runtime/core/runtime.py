@@ -291,6 +291,35 @@ class AgentRuntime:
             # Clear consumed mailbox messages
             self.message_bus.clear_mailbox(task.agent_id)
 
+            # Store tool execution results as context segments
+            for tr in result.tool_results:
+                tool_name = tr.get("tool_name") or "unknown"
+                if tr.get("ok"):
+                    content = tr.get("output") or ""
+                    self.context_store.create_segment(
+                        kind=f"tool_result:{tool_name}",
+                        content=content,
+                        owner=task.agent_id,
+                        visibility="shared",
+                    )
+                else:
+                    content = tr.get("error") or tr.get("output") or "tool execution failed"
+                    self.context_store.create_segment(
+                        kind=f"tool_error:{tool_name}",
+                        content=content,
+                        owner=task.agent_id,
+                        visibility="shared",
+                    )
+                self.event_log.emit(
+                    "tool.executed",
+                    task_id=task.task_id,
+                    tool_name=tool_name,
+                    ok=tr.get("ok"),
+                )
+                self.metrics.inc("tool.calls")
+                if not tr.get("ok"):
+                    self.metrics.inc("tool.errors")
+
             self._add_dynamic_tasks(task, result.dynamic_tasks)
         else:
             self._handle_failure(task, result.error or "unknown worker error")

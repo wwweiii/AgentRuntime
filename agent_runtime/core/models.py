@@ -82,4 +82,5 @@ class WorkerResult:
     messages: list[dict[str, Any]] = field(default_factory=list)
     dynamic_tasks: list[dict[str, Any]] = field(default_factory=list)
     message_directives: list[dict[str, Any]] = field(default_factory=list)
+    tool_results: list[dict[str, Any]] = field(default_factory=list)
 
